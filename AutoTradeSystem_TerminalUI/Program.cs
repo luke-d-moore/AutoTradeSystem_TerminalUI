@@ -93,7 +93,7 @@ leftPane.Add(
 );
 
 var middlePane = new FrameView("MARKET PRICES") {
-    X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(40), Height = Dim.Fill()
+    X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill()
 };
 var priceTable = new TableView() { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
@@ -103,10 +103,11 @@ priceTable.ColorScheme = greenOnBlack;
 
 var priceSource = new DataTable();
 priceSource.Columns.Add("Ticker", typeof(string));
-priceSource.Columns.Add("Price", typeof(string));
+priceSource.Columns.Add("Price ($)", typeof(string));
 
-priceSource.Rows.Add("BTC-USD", "$64,231.50");
-priceSource.Rows.Add("ETH-USD", "$3,450.20");
+priceSource.Rows.Add("IBM", "168.21");
+priceSource.Rows.Add("AAPL", "215.76");
+priceSource.Rows.Add("AMZN", "227.39");
 
 priceTable.Table = priceSource;
 
@@ -114,7 +115,7 @@ middlePane.Add(priceTable);
 
 
 var rightPane = new FrameView("CURRENT STRATEGIES") {
-    X = Pos.Right(middlePane), Y = 0, Width = Dim.Fill(), Height = Dim.Fill()
+    X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(55), Height = Dim.Fill()
 };
 var strategyTable = new TableView() { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
@@ -126,10 +127,11 @@ var strategySource = new DataTable();
 strategySource.Columns.Add("Ticker", typeof(string));
 strategySource.Columns.Add("Action", typeof(string));
 strategySource.Columns.Add("Quantity", typeof(int));
-strategySource.Columns.Add("Price", typeof(decimal));
+strategySource.Columns.Add("ActionPrice ($)", typeof(decimal));
 
-strategySource.Rows.Add("AAPL", "Buy", 10, 175.50m);
-strategySource.Rows.Add("TSLA", "Sell", 5, 202.10m);
+strategySource.Rows.Add("IBM", "Buy", 12, 175.50m);
+strategySource.Rows.Add("AAPL", "Buy", 10, 230.50m);
+strategySource.Rows.Add("AMZN", "Sell", 5, 245.10m);
 
 strategyTable.Table = strategySource;
 
@@ -144,7 +146,8 @@ top.LayoutComplete += (e) => {
         priceTable.Style.ColumnStyles.Clear();
         foreach (DataColumn col in priceSource.Columns) {
             priceTable.Style.ColumnStyles.Add(col, new TableView.ColumnStyle { 
-                MinWidth = pColWidth, MaxWidth = pColWidth 
+                MinWidth = pColWidth, MaxWidth = pColWidth,
+                Alignment = TextAlignment.Centered
             });
         }
     }
@@ -155,7 +158,8 @@ top.LayoutComplete += (e) => {
         strategyTable.Style.ColumnStyles.Clear();
         foreach (DataColumn col in strategySource.Columns) {
             strategyTable.Style.ColumnStyles.Add(col, new TableView.ColumnStyle { 
-                MinWidth = sColWidth, MaxWidth = sColWidth 
+                MinWidth = sColWidth, MaxWidth = sColWidth,
+                Alignment = TextAlignment.Centered
             });
         }
     }
