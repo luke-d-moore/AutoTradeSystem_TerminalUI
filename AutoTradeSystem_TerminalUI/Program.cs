@@ -1,7 +1,34 @@
 ﻿using Terminal.Gui;
 using NStack;
+using AutoTradeSystem_TerminalUI.Services;
+using AutoTradeSystem_TerminalUI.Interfaces;
+using PricingSystem.Protos;
 using System.Data;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection; 
 
+
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddSingleton<PricingService>();
+builder.Services.AddSingleton<IPricingService>(p => p.GetRequiredService<PricingService>());
+builder.Services.AddHostedService(p => p.GetRequiredService<PricingService>());
+
+builder.Services.AddGrpcClient<GrpcPricingService.GrpcPricingServiceClient>(o => 
+{
+    o.Address = new Uri("https://localhost:7001");
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback =
+        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
+
+var host = builder.Build();
+
+await host.StartAsync();
+
+var pricingService = host.Services.GetRequiredService<IPricingService>();
 
 Application.Init();
 
@@ -13,14 +40,16 @@ var greenOnBlack = new ColorScheme() {
     Disabled = Terminal.Gui.Attribute.Make(Color.DarkGray, Color.Black)
 };
 
+var marketPrices= pricingService.GetLatestPrices();
+
 var top = new Window() { Title = "TRADING SYSTEM TUI", ColorScheme = greenOnBlack };
 
 var leftPane = new FrameView("NEW ORDER") {
     X = 0, Y = 0, Width = Dim.Percent(25), Height = Dim.Fill()
 };
 
-ustring[] tickers = new ustring[] { "IBM", "AAPL", "AMZN" }; //Hardcoded for testing
 ustring[] actions = new ustring[] { "Buy", "Sell" };
+ustring[] tickers = pricingService.GetLatestTickers().Select(t => (ustring)t).ToArray();
 
 var tickerSelect = new ComboBox() { 
     X = 1, 
@@ -105,9 +134,10 @@ var priceSource = new DataTable();
 priceSource.Columns.Add("Ticker", typeof(string));
 priceSource.Columns.Add("Price ($)", typeof(string));
 
-priceSource.Rows.Add("IBM", "168.21");
-priceSource.Rows.Add("AAPL", "215.76");
-priceSource.Rows.Add("AMZN", "227.39");
+foreach(var kvp in marketPrices)
+{
+    priceSource.Rows.Add(kvp.Key, kvp.Value.ToString("N2"));
+}
 
 priceTable.Table = priceSource;
 
@@ -165,6 +195,40 @@ top.LayoutComplete += (e) => {
     }
 };
 
+
+Application.MainLoop.AddTimeout(TimeSpan.FromMilliseconds(250), (loop) => {
+    // --- 1. Update Market Prices Table ---
+    var freshPrices = pricingService.GetLatestPrices();
+    bool tableChanged = false;
+
+    foreach (var kvp in freshPrices) {
+        var row = priceSource.AsEnumerable()
+            .FirstOrDefault(r => r.Field<string>("Ticker") == kvp.Key);
+
+        if (row != null) {
+            string currentVal = row["Price ($)"].ToString();
+            string newVal = kvp.Value.ToString("N2");
+            if (currentVal != newVal) {
+                row["Price ($)"] = newVal;
+                tableChanged = true;
+            }
+        } else {
+            priceSource.Rows.Add(kvp.Key, kvp.Value.ToString("N2"));
+            tableChanged = true;
+        }
+    }
+    if (tableChanged) priceTable.SetNeedsDisplay();
+
+var freshTickers = pricingService.GetLatestTickers();
+
+if (freshTickers.Count() != tickerSelect.Source.Count) {
+    var newUStrings = freshTickers.Select(t => (ustring)t).ToList();
+    tickerSelect.Source = new ListWrapper(newUStrings);
+    tickerSelect.SetNeedsDisplay();
+}
+
+    return true;
+});
 
 Application.Run(top);
 Application.Shutdown();
