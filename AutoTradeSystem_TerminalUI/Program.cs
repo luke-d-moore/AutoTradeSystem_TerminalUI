@@ -197,7 +197,6 @@ top.LayoutComplete += (e) => {
 
 
 Application.MainLoop.AddTimeout(TimeSpan.FromMilliseconds(250), (loop) => {
-    // --- 1. Update Market Prices Table ---
     var freshPrices = pricingService.GetLatestPrices();
     bool tableChanged = false;
 
