@@ -45,7 +45,6 @@ SetupLayoutHandling(top, priceTable, priceSource, strategyTable, strategySource)
 SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect);
 
 Application.Run(top);
-Application.Run(top);
 Application.Shutdown();
 
 void ConfigureServices(HostApplicationBuilder builder) {
@@ -82,7 +81,7 @@ FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, Te
     pane.Add(new Label("Ticker:") { X = 1, Y = 1 }, ticker,
              new Label("Quantity:") { X = 1, Y = 4 }, qty,
              new Label("TradeAction:") { X = 1, Y = 7 }, actions,
-             new Label("ActionPrice:") { X = 1, Y = 11 }, price, submitBtn);
+             new Label("ActionPrice ($):") { X = 1, Y = 11 }, price, submitBtn);
     return pane;
 }
 
