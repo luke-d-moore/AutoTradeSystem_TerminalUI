@@ -17,6 +17,7 @@ var host = builder.Build();
 await host.StartAsync();
 
 var pricingService = host.Services.GetRequiredService<IPricingService>();
+var autoTradingStrategyService = host.Services.GetRequiredService<IAutoTradingStrategyService>();
 var httpClient = host.Services.GetRequiredService<IHttpClientFactory>().CreateClient("TradingApi");
 
 Application.Init();
@@ -55,13 +56,29 @@ void ConfigureServices(HostApplicationBuilder builder) {
     builder.Services.AddSingleton<PricingService>();
     builder.Services.AddSingleton<IPricingService>(p => p.GetRequiredService<PricingService>());
     builder.Services.AddHostedService(p => p.GetRequiredService<PricingService>());
+    builder.Services.AddHttpClient("TradingApi", client =>
+    {
+        client.BaseAddress = new Uri("http://localhost:5042/");
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    });
+    builder.Services.AddSingleton(sp =>
+    {
+        var factory = sp.GetRequiredService<IHttpClientFactory>();
+        var client = factory.CreateClient("TradingApi");
+
+        return new AutoTradingStrategyService(client);
+    });
+
+    builder.Services.AddSingleton<IAutoTradingStrategyService>(sp => sp.GetRequiredService<AutoTradingStrategyService>());
+    builder.Services.AddHostedService(p => p.GetRequiredService<AutoTradingStrategyService>());
     builder.Logging.ClearProviders();
     builder.Services.AddGrpcClient<GrpcPricingService.GrpcPricingServiceClient>(o => o.Address = new Uri("https://localhost:7001"))
-        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler {
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-        });
-    builder.Services.AddHttpClient("TradingApi", client => {
-        client.BaseAddress = new Uri("http://localhost:5042/");
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler {
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
     });
 }
 
@@ -92,18 +109,17 @@ FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, Te
         };
 
     try {
-        var response = await client.PostAsJsonAsync("api/TradingStrategy/", dto);
-        
-        if (response.IsSuccessStatusCode) {
-            var result = await response.Content.ReadFromJsonAsync<AddStrategyResponse>();
-            MessageBox.Query("Success", result?.Message ?? "Order Submitted", "Ok");
+        var response = await autoTradingStrategyService.AddStrategy(dto);
+     
+        if (response.Success) {
+            MessageBox.Query("Success", response.Message ?? "Order Submitted", "Ok");
 
             ticker.Text = "";
             qty.Text = "";
             price.Text = "";
             actions.SelectedItem = 0;
         } else {
-            MessageBox.ErrorQuery("API Error", $"Status: {response.StatusCode}", "Ok");
+            MessageBox.ErrorQuery("API Error", "Error", "Ok");
         }
     } catch (Exception ex) { 
         MessageBox.ErrorQuery("Error", ex.Message, "Ok"); 
@@ -141,22 +157,15 @@ DataTable GetInitialStrategyData(HttpClient client) {
     dt.Columns.Add("ActionPrice ($)", typeof(decimal));
 
     Task.Run(async () => {
-        try {
-            var res = await client.GetFromJsonAsync<GetStrategiesResponse>("api/TradingStrategy/");
-            if (res?.Success == true) 
-            {
-                foreach (var kvp in res.TradingStrategies) {
-                    var s = kvp.Value;
-                    dt.Rows.Add(
-                    s.TradingStrategyDto.Ticker, 
-                    s.TradingStrategyDto.TradeAction, 
-                    s.TradingStrategyDto.Quantity, 
-                    s.TradingStrategyDto.ActionPrice);
-                }
+            foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
+                var s = kvp.Value;
+                dt.Rows.Add(
+                s.TradingStrategyDto.Ticker, 
+                s.TradingStrategyDto.TradeAction, 
+                s.TradingStrategyDto.Quantity, 
+                s.TradingStrategyDto.ActionPrice);
             }
-        } catch {}
-    });
-
+        });
     return dt;
 }
 
@@ -207,29 +216,17 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
             tickerSelect.Source = new ListWrapper(tickers);
             tickerSelect.SetNeedsDisplay();
         }
-        return true;
-    });
 
-    Application.MainLoop.AddTimeout(TimeSpan.FromSeconds(5), (_) => {
-        Task.Run(async () => {
-            try {
-                var res = await client.GetFromJsonAsync<GetStrategiesResponse>("api/TradingStrategy/");
-                if (res?.Success == true) {
-                    Application.MainLoop.Invoke(() => {
-                        sSrc.Rows.Clear();
-                        foreach (var kvp in res.TradingStrategies) {
-                            var s = kvp.Value;
-                            sSrc.Rows.Add(
-                            s.TradingStrategyDto.Ticker, 
-                            s.TradingStrategyDto.TradeAction, 
-                            s.TradingStrategyDto.Quantity, 
-                            s.TradingStrategyDto.ActionPrice);
-                        }
-                        sTab.SetNeedsDisplay();
-                    });
-                }
-            } catch {}
-        });
+        sSrc.Rows.Clear();
+        foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
+            var s = kvp.Value;
+            sSrc.Rows.Add(
+            s.TradingStrategyDto.Ticker, 
+            s.TradingStrategyDto.TradeAction, 
+            s.TradingStrategyDto.Quantity, 
+            s.TradingStrategyDto.ActionPrice);
+        }
+        sTab.SetNeedsDisplay();
         return true;
     });
 }
