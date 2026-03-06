@@ -10,9 +10,7 @@ namespace AutoTradeSystem_TerminalUI.Services
     {
         private readonly GrpcPricingService.GrpcPricingServiceClient _grpcClient;
         private ConcurrentDictionary<string, decimal> _prices = new ConcurrentDictionary<string, decimal>();
-        private readonly TaskCompletionSource<bool> _initialpriceLoad = new();
         private int _retryInterval = 5000;
-        public Task InitialPriceLoadTask => _initialpriceLoad.Task;
         public ConcurrentDictionary<string, decimal> Prices => _prices;
         public PricingService(GrpcPricingService.GrpcPricingServiceClient grpcClient)
         {
