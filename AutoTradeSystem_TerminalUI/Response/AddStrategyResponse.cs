@@ -1,0 +1,21 @@
+﻿using AutoTradeSystem_TerminalUI.Dtos;
+using AutoTradeSystem_TerminalUI;
+using System.Text.Json.Serialization;
+
+namespace AutoTradeSystem_TerminalUI 
+{
+    public class AddStrategyResponse
+    {
+        [JsonPropertyName("TradingStrategy")]
+        public TradingStrategyDto TradingStrategyDto { get; set; }
+
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; }
+
+        [JsonPropertyName("timeStamp")]
+        public DateTime TimeStamp { get; set; }
+    }
+}

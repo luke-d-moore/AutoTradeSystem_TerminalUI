@@ -7,6 +7,9 @@ using System.Data;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection; 
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Json;
+using AutoTradeSystem_TerminalUI.Dtos;
+using AutoTradeSystem_TerminalUI;
 
 var builder = Host.CreateApplicationBuilder(args);
 ConfigureServices(builder);
@@ -14,13 +17,14 @@ var host = builder.Build();
 await host.StartAsync();
 
 var pricingService = host.Services.GetRequiredService<IPricingService>();
+var httpClient = host.Services.GetRequiredService<IHttpClientFactory>().CreateClient("TradingApi");
 
 Application.Init();
 var theme = GetGreenOnBlackTheme();
 
 var priceSource = GetPriceTable();
 
-var strategySource = GetInitialStrategyData();
+var strategySource = GetInitialStrategyData(httpClient);
 
 var tickerSelect = new ComboBox() { X = 1, Y = 2, Width = Dim.Fill(1), Height = 5, Source = new ListWrapper(new ustring[0]) };
 var quantityInput = new TextField("") { X = 1, Y = 5, Width = Dim.Fill(1) };
@@ -30,7 +34,7 @@ var priceTable = CreateTableView(priceSource, theme);
 var strategyTable = CreateTableView(strategySource, theme);
 
 
-var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput);
+var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput, httpClient);
 var middlePane = new FrameView("MARKET PRICES") { X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
 var rightPane = new FrameView("CURRENT STRATEGIES") { X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(55), Height = Dim.Fill() };
 
@@ -42,7 +46,7 @@ top.Add(leftPane, middlePane, rightPane);
 
 SetupInputValidation(quantityInput, priceInput);
 SetupLayoutHandling(top, priceTable, priceSource, strategyTable, strategySource);
-SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect);
+SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect, strategySource, strategyTable, httpClient);
 
 Application.Run(top);
 Application.Shutdown();
@@ -56,6 +60,9 @@ void ConfigureServices(HostApplicationBuilder builder) {
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler {
             ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         });
+    builder.Services.AddHttpClient("TradingApi", client => {
+        client.BaseAddress = new Uri("http://localhost:5042/");
+    });
 }
 
 ColorScheme GetGreenOnBlackTheme() => new ColorScheme() {
@@ -66,16 +73,41 @@ ColorScheme GetGreenOnBlackTheme() => new ColorScheme() {
     Disabled = Terminal.Gui.Attribute.Make(Color.DarkGray, Color.Black)
 };
 
-FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, TextField price) {
+FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, TextField price, HttpClient client) {
     var pane = new FrameView("NEW ORDER") { X = 0, Y = 0, Width = Dim.Percent(25), Height = Dim.Fill() };
     var submitBtn = new Button("SUBMIT") { X = Pos.Center(), Y = Pos.AnchorEnd(2) };
 
-    submitBtn.Clicked += () => {
-        if (int.TryParse(qty.Text.ToString(), out int q) && decimal.TryParse(price.Text.ToString(), out decimal p)) {
-            MessageBox.Query("Order Sent", $"Target: {ticker.Text}\n{actions.RadioLabels[actions.SelectedItem]} {q} @ {p}", "Ok");
-        } else {
-            MessageBox.ErrorQuery("Error", "Invalid Quantity or Price", "Ok");
+    submitBtn.Clicked += async () => {
+        if (!int.TryParse(qty.Text.ToString(), out int q) || !decimal.TryParse(price.Text.ToString(), out decimal p)) {
+            MessageBox.ErrorQuery("Error", "Invalid inputs", "Ok");
+            return;
         }
+
+        var dto = new TradingStrategyDto {
+            Ticker = ticker.Text.ToString(),
+            TradeAction = (TradeAction)actions.SelectedItem,
+            Quantity = q,
+            ActionPrice = p,
+            PriceChange = 0 
+        };
+
+    try {
+        var response = await client.PostAsJsonAsync("api/TradingStrategy/", dto);
+        
+        if (response.IsSuccessStatusCode) {
+            var result = await response.Content.ReadFromJsonAsync<AddStrategyResponse>();
+            MessageBox.Query("Success", result?.Message ?? "Order Submitted", "Ok");
+
+            ticker.Text = "";
+            qty.Text = "";
+            price.Text = "";
+            actions.SelectedItem = 0;
+        } else {
+            MessageBox.ErrorQuery("API Error", $"Status: {response.StatusCode}", "Ok");
+        }
+    } catch (Exception ex) { 
+        MessageBox.ErrorQuery("Error", ex.Message, "Ok"); 
+    }
     };
 
     pane.Add(new Label("Ticker:") { X = 1, Y = 1 }, ticker,
@@ -101,16 +133,30 @@ DataTable GetPriceTable() {
     return dt;
 }
 
-DataTable GetInitialStrategyData() {
+DataTable GetInitialStrategyData(HttpClient client) {
     var dt = new DataTable();
     dt.Columns.Add("Ticker", typeof(string));
     dt.Columns.Add("Action", typeof(string));
     dt.Columns.Add("Quantity", typeof(int));
     dt.Columns.Add("ActionPrice ($)", typeof(decimal));
-    //Add in Dummy Data for testing purposes
-    dt.Rows.Add("IBM", "Buy", 12, 175.50m);
-    dt.Rows.Add("AAPL", "Buy", 10, 230.50m);
-    dt.Rows.Add("AMZN", "Sell", 5, 245.10m);
+
+    Task.Run(async () => {
+        try {
+            var res = await client.GetFromJsonAsync<GetStrategiesResponse>("api/TradingStrategy/");
+            if (res?.Success == true) 
+            {
+                foreach (var kvp in res.TradingStrategies) {
+                    var s = kvp.Value;
+                    dt.Rows.Add(
+                    s.TradingStrategyDto.Ticker, 
+                    s.TradingStrategyDto.TradeAction, 
+                    s.TradingStrategyDto.Quantity, 
+                    s.TradingStrategyDto.ActionPrice);
+                }
+            }
+        } catch {}
+    });
+
     return dt;
 }
 
@@ -143,7 +189,7 @@ void AdjustColumnWidths(TableView table, DataTable source, int margin, int colCo
     }
 }
 
-void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect) {
+void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect, DataTable sSrc, TableView sTab, HttpClient client){
     Application.MainLoop.AddTimeout(TimeSpan.FromMilliseconds(250), (_) => {
         var freshPrices = service.GetLatestPrices();
         bool changed = false;
@@ -161,6 +207,29 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
             tickerSelect.Source = new ListWrapper(tickers);
             tickerSelect.SetNeedsDisplay();
         }
+        return true;
+    });
+
+    Application.MainLoop.AddTimeout(TimeSpan.FromSeconds(5), (_) => {
+        Task.Run(async () => {
+            try {
+                var res = await client.GetFromJsonAsync<GetStrategiesResponse>("api/TradingStrategy/");
+                if (res?.Success == true) {
+                    Application.MainLoop.Invoke(() => {
+                        sSrc.Rows.Clear();
+                        foreach (var kvp in res.TradingStrategies) {
+                            var s = kvp.Value;
+                            sSrc.Rows.Add(
+                            s.TradingStrategyDto.Ticker, 
+                            s.TradingStrategyDto.TradeAction, 
+                            s.TradingStrategyDto.Quantity, 
+                            s.TradingStrategyDto.ActionPrice);
+                        }
+                        sTab.SetNeedsDisplay();
+                    });
+                }
+            } catch {}
+        });
         return true;
     });
 }
