@@ -20,30 +20,30 @@ namespace AutoTradeSystem_TerminalUI.Services
         }
         protected override async Task UpdatePrices(CancellationToken cancellationToken)
         {
-            using var call = _grpcClient.GetLatestPrices(new Empty());
-
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
+                    using var call = _grpcClient.GetLatestPrices(new Empty());
+
                     await foreach (var priceUpdate in call.ResponseStream.ReadAllAsync())
                     {
                         Prices[priceUpdate.Symbol] = (decimal)priceUpdate.Price;
                     }
 
-                    await Task.Delay(_retryInterval);
+                    await Task.Delay(_retryInterval);    
                 }
                 catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
-                catch (RpcException)
+                catch (RpcException ex)
                 {
                     await Task.Delay(_retryInterval);
-                    break;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    await Task.Delay(_retryInterval);
                 }
             }
         }

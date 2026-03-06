@@ -6,6 +6,7 @@ using PricingSystem.Protos;
 using System.Data;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection; 
+using Microsoft.Extensions.Logging;
 
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -13,6 +14,11 @@ HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddSingleton<PricingService>();
 builder.Services.AddSingleton<IPricingService>(p => p.GetRequiredService<PricingService>());
 builder.Services.AddHostedService(p => p.GetRequiredService<PricingService>());
+
+builder.Logging.ClearProviders();
+builder.Logging.AddFilter("Microsoft", LogLevel.None);
+builder.Logging.AddFilter("Grpc", LogLevel.None);
+builder.Logging.AddFilter("System.Net.Http", LogLevel.None);
 
 builder.Services.AddGrpcClient<GrpcPricingService.GrpcPricingServiceClient>(o => 
 {
@@ -40,7 +46,6 @@ var greenOnBlack = new ColorScheme() {
     Disabled = Terminal.Gui.Attribute.Make(Color.DarkGray, Color.Black)
 };
 
-var marketPrices= pricingService.GetLatestPrices();
 
 var top = new Window() { Title = "TRADING SYSTEM TUI", ColorScheme = greenOnBlack };
 
@@ -49,7 +54,7 @@ var leftPane = new FrameView("NEW ORDER") {
 };
 
 ustring[] actions = new ustring[] { "Buy", "Sell" };
-ustring[] tickers = pricingService.GetLatestTickers().Select(t => (ustring)t).ToArray();
+ustring[] tickers = new ustring[0];
 
 var tickerSelect = new ComboBox() { 
     X = 1, 
@@ -133,11 +138,6 @@ priceTable.ColorScheme = greenOnBlack;
 var priceSource = new DataTable();
 priceSource.Columns.Add("Ticker", typeof(string));
 priceSource.Columns.Add("Price ($)", typeof(string));
-
-foreach(var kvp in marketPrices)
-{
-    priceSource.Rows.Add(kvp.Key, kvp.Value.ToString("N2"));
-}
 
 priceTable.Table = priceSource;
 
