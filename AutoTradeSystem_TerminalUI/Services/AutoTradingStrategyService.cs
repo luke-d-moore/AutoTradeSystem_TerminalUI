@@ -26,9 +26,20 @@ namespace AutoTradeSystem_TerminalUI.Services
                 var response = await _client.GetFromJsonAsync<GetStrategiesResponse>("api/TradingStrategy/");
                 if (response.Success)
                 {
-                    foreach (var kvp in response.TradingStrategies) {
+                    var strategiesToRemove = _tradingStrategies.Keys.ToHashSet();
+
+                    foreach (var kvp in response.TradingStrategies) 
+                    {
                         _tradingStrategies[kvp.Key] = kvp.Value;
+
+                        strategiesToRemove.Remove(kvp.Key);
                     }
+
+                    foreach (var key in strategiesToRemove)
+                    {
+                        _tradingStrategies.Remove(key, out var removed);
+                    }
+                    
                 }
                     await Task.Delay(_retryInterval);    
                 }
