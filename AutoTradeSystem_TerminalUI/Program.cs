@@ -34,6 +34,45 @@ var actionSelect = new RadioGroup(new ustring[] { "Buy", "Sell" }) { X = 1, Y = 
 var priceTable = CreateTableView(priceSource, theme);
 var strategyTable = CreateTableView(strategySource, theme);
 
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Delete"], new TableView.ColumnStyle {
+    Alignment = TextAlignment.Centered,
+    MinWidth = 8,
+    MaxWidth = 8
+});
+
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Id"], new TableView.ColumnStyle {
+    MinWidth = 0,
+    MaxWidth = 0,
+    Visible = false
+});
+
+strategyTable.CellActivated += async (e) => {
+    if (e.Col == 5) { 
+        var row = strategySource.Rows[e.Row];
+        var strategyId = row["Id"].ToString();
+        var ticker = row["Ticker"].ToString();
+
+        int result = MessageBox.Query("Delete Strategy", $"Delete {ticker} strategy?", "Yes", "No");
+        
+        if (result == 0) { 
+            try {
+                var response = await httpClient.DeleteAsync($"api/TradingStrategy/{strategyId}");
+                
+                if (response.IsSuccessStatusCode) {
+                    Application.MainLoop.Invoke(() => {
+                        strategySource.Rows.Remove(row);
+                        strategyTable.SetNeedsDisplay();
+                    });
+                } else {
+                    MessageBox.ErrorQuery("Error", "API failed to delete strategy.", "Ok");
+                }
+            } catch (Exception ex) {
+                MessageBox.ErrorQuery("Connection Error", ex.Message, "Ok");
+            }
+        }
+    }
+};
+
 
 var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput, httpClient);
 var middlePane = new FrameView("MARKET PRICES") { X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
@@ -151,19 +190,23 @@ DataTable GetPriceTable() {
 
 DataTable GetInitialStrategyData(HttpClient client) {
     var dt = new DataTable();
+    dt.Columns.Add("Id", typeof(string));
     dt.Columns.Add("Ticker", typeof(string));
     dt.Columns.Add("Action", typeof(string));
     dt.Columns.Add("Quantity", typeof(int));
     dt.Columns.Add("ActionPrice ($)", typeof(decimal));
+    dt.Columns.Add("Delete", typeof(string));
 
     Task.Run(async () => {
             foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
                 var s = kvp.Value;
                 dt.Rows.Add(
+                kvp.Key,
                 s.TradingStrategyDto.Ticker, 
                 s.TradingStrategyDto.TradeAction, 
                 s.TradingStrategyDto.Quantity, 
-                s.TradingStrategyDto.ActionPrice);
+                s.TradingStrategyDto.ActionPrice,
+                "[DELETE]");
             }
         });
     return dt;
@@ -181,10 +224,10 @@ void SetupInputValidation(TextField qty, TextField price) {
 bool IsNavKey(Key key) => key == Key.Backspace || key == Key.Delete || key == Key.CursorLeft || key == Key.CursorRight;
 
 void SetupLayoutHandling(Window top, TableView pTab, DataTable pSrc, TableView sTab, DataTable sSrc) {
-    int margin = 4;
+    int margin = 6;
     top.LayoutComplete += (e) => {
         AdjustColumnWidths(pTab, pSrc, margin, 2);
-        AdjustColumnWidths(sTab, sSrc, margin, 4);
+        AdjustColumnWidths(sTab, sSrc, margin, 6);
     };
 }
 
@@ -221,10 +264,12 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
         foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
             var s = kvp.Value;
             sSrc.Rows.Add(
+            kvp.Key,
             s.TradingStrategyDto.Ticker, 
             s.TradingStrategyDto.TradeAction, 
             s.TradingStrategyDto.Quantity, 
-            s.TradingStrategyDto.ActionPrice);
+            s.TradingStrategyDto.ActionPrice,
+            "[DELETE]");
         }
         sTab.SetNeedsDisplay();
         return true;
