@@ -56,9 +56,9 @@ strategyTable.CellActivated += async (e) => {
         
         if (result == 0) { 
             try {
-                var response = await httpClient.DeleteAsync($"api/TradingStrategy/{strategyId}");
+                var success = await autoTradingStrategyService.DeleteStrategy(strategyId);
                 
-                if (response.IsSuccessStatusCode) {
+                if (success) {
                     Application.MainLoop.Invoke(() => {
                         strategySource.Rows.Remove(row);
                         strategyTable.SetNeedsDisplay();

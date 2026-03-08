@@ -7,6 +7,7 @@ namespace AutoTradeSystem_TerminalUI.Interfaces
     public interface IAutoTradingStrategyService :IHostedService
     {
         public IDictionary<string, TradingStrategy> GetStrategies();
-        public Task<AddStrategyResponse> AddStrategy(TradingStrategyDto tradingStrategyDto);
+        public Task<AddStrategyResponse> AddStrategy(TradingStrategyDto TradingStrategyDto);
+        public Task<bool> DeleteStrategy(string strategyId);
     }
 }

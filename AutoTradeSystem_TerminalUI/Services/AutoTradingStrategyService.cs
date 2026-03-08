@@ -68,5 +68,18 @@ namespace AutoTradeSystem_TerminalUI.Services
                 return new AddStrategyResponse(){Success = false};
             }
         }
+
+        public async Task<bool> DeleteStrategy(string strategyId)
+        {
+                var response = await _client.DeleteAsync($"api/TradingStrategy/{strategyId}");
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 }
