@@ -59,10 +59,7 @@ strategyTable.CellActivated += async (e) => {
                 var success = await autoTradingStrategyService.DeleteStrategy(strategyId);
                 
                 if (success) {
-                    Application.MainLoop.Invoke(() => {
-                        strategySource.Rows.Remove(row);
-                        strategyTable.SetNeedsDisplay();
-                    });
+                    MessageBox.Query("Success", "Strategy Deleted", "Ok");
                 } else {
                     MessageBox.ErrorQuery("Error", "API failed to delete strategy.", "Ok");
                 }
@@ -76,7 +73,7 @@ strategyTable.CellActivated += async (e) => {
 
 var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput, httpClient);
 var middlePane = new FrameView("MARKET PRICES") { X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
-var rightPane = new FrameView("CURRENT STRATEGIES") { X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(55), Height = Dim.Fill() };
+var rightPane = new FrameView("CURRENT STRATEGIES") { X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(60), Height = Dim.Fill() };
 
 middlePane.Add(priceTable);
 rightPane.Add(strategyTable);
@@ -97,7 +94,7 @@ void ConfigureServices(HostApplicationBuilder builder) {
     builder.Services.AddHostedService(p => p.GetRequiredService<PricingService>());
     builder.Services.AddHttpClient("TradingApi", client =>
     {
-        client.BaseAddress = new Uri("http://localhost:5042/");
+        client.BaseAddress = new Uri("https://localhost:7158/");
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
@@ -130,7 +127,7 @@ ColorScheme GetGreenOnBlackTheme() => new ColorScheme() {
 };
 
 FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, TextField price, HttpClient client) {
-    var pane = new FrameView("NEW ORDER") { X = 0, Y = 0, Width = Dim.Percent(25), Height = Dim.Fill() };
+    var pane = new FrameView("NEW ORDER") { X = 0, Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
     var submitBtn = new Button("SUBMIT") { X = Pos.Center(), Y = Pos.AnchorEnd(2) };
 
     submitBtn.Clicked += async () => {
