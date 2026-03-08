@@ -61,11 +61,34 @@ namespace AutoTradeSystem_TerminalUI.Services
         {
             var response = await _client.PostAsJsonAsync("api/TradingStrategy/", tradingStrategyDto);
             if (response.IsSuccessStatusCode) {
+                _tradingStrategies[""]=new TradingStrategy(){
+                TradingStrategyDto = new TradingStrategyDto()
+                {
+                    Ticker = tradingStrategyDto.Ticker, 
+                    TradeAction = tradingStrategyDto.TradeAction,
+                    Quantity = tradingStrategyDto.Quantity,
+                    ActionPrice = tradingStrategyDto.ActionPrice   
+                }
+                };
                 return await response.Content.ReadFromJsonAsync<AddStrategyResponse>();
             }
             else
             {
                 return new AddStrategyResponse(){Success = false};
+            }
+        }
+
+        public async Task<bool> DeleteStrategy(string strategyId)
+        {
+            var response = await _client.DeleteAsync($"api/TradingStrategy/{strategyId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _tradingStrategies.Remove(strategyId, out var removed);
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
     }

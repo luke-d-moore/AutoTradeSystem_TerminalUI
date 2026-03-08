@@ -32,12 +32,11 @@ var quantityInput = new TextField("") { X = 1, Y = 5, Width = Dim.Fill(1) };
 var priceInput = new TextField("") { X = 1, Y = 12, Width = Dim.Fill(1) };
 var actionSelect = new RadioGroup(new ustring[] { "Buy", "Sell" }) { X = 1, Y = 8 };
 var priceTable = CreateTableView(priceSource, theme);
-var strategyTable = CreateTableView(strategySource, theme);
-
+var strategyTable = CreateStrategyTableView(strategySource, theme);
 
 var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput, httpClient);
 var middlePane = new FrameView("MARKET PRICES") { X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
-var rightPane = new FrameView("CURRENT STRATEGIES") { X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(55), Height = Dim.Fill() };
+var rightPane = new FrameView("CURRENT STRATEGIES") { X = Pos.Right(middlePane), Y = 0, Width = Dim.Percent(60), Height = Dim.Fill() };
 
 middlePane.Add(priceTable);
 rightPane.Add(strategyTable);
@@ -47,7 +46,7 @@ top.Add(leftPane, middlePane, rightPane);
 
 SetupInputValidation(quantityInput, priceInput);
 SetupLayoutHandling(top, priceTable, priceSource, strategyTable, strategySource);
-SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect, strategySource, strategyTable, httpClient);
+SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect, strategySource, strategyTable);
 
 Application.Run(top);
 Application.Shutdown();
@@ -58,7 +57,7 @@ void ConfigureServices(HostApplicationBuilder builder) {
     builder.Services.AddHostedService(p => p.GetRequiredService<PricingService>());
     builder.Services.AddHttpClient("TradingApi", client =>
     {
-        client.BaseAddress = new Uri("http://localhost:5042/");
+        client.BaseAddress = new Uri("https://localhost:7158/");
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
@@ -91,7 +90,7 @@ ColorScheme GetGreenOnBlackTheme() => new ColorScheme() {
 };
 
 FrameView CreateOrderPane(ComboBox ticker, TextField qty, RadioGroup actions, TextField price, HttpClient client) {
-    var pane = new FrameView("NEW ORDER") { X = 0, Y = 0, Width = Dim.Percent(25), Height = Dim.Fill() };
+    var pane = new FrameView("NEW ORDER") { X = 0, Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
     var submitBtn = new Button("SUBMIT") { X = Pos.Center(), Y = Pos.AnchorEnd(2) };
 
     submitBtn.Clicked += async () => {
@@ -142,6 +141,49 @@ TableView CreateTableView(DataTable source, ColorScheme theme) {
     };
 }
 
+TableView CreateStrategyTableView(DataTable source, ColorScheme theme) {
+
+var strategyTable = CreateTableView(strategySource, theme);
+
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Delete"], new TableView.ColumnStyle {
+    Alignment = TextAlignment.Centered,
+    MinWidth = 8,
+    MaxWidth = 8
+});
+
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Id"], new TableView.ColumnStyle {
+    MinWidth = 0,
+    MaxWidth = 0,
+    Visible = false
+});
+
+strategyTable.CellActivated += async (e) => {
+    if (e.Col == 5) { 
+        var row = strategySource.Rows[e.Row];
+        var strategyId = row["Id"].ToString();
+        var ticker = row["Ticker"].ToString();
+
+        int result = MessageBox.Query("Delete Strategy", $"Delete {ticker} strategy?", "Yes", "No");
+        
+        if (result == 0) { 
+            try {
+                var success = await autoTradingStrategyService.DeleteStrategy(strategyId);
+                
+                if (success) {
+                    MessageBox.Query("Success", "Strategy Deleted", "Ok");
+                } else {
+                    MessageBox.ErrorQuery("Error", "API failed to delete strategy.", "Ok");
+                }
+            } catch (Exception ex) {
+                MessageBox.ErrorQuery("Connection Error", ex.Message, "Ok");
+            }
+        }
+    }
+};
+
+return strategyTable;
+}
+
 DataTable GetPriceTable() {
     var dt = new DataTable();
     dt.Columns.Add("Ticker", typeof(string));
@@ -151,21 +193,12 @@ DataTable GetPriceTable() {
 
 DataTable GetInitialStrategyData(HttpClient client) {
     var dt = new DataTable();
+    dt.Columns.Add("Id", typeof(string));
     dt.Columns.Add("Ticker", typeof(string));
     dt.Columns.Add("Action", typeof(string));
     dt.Columns.Add("Quantity", typeof(int));
     dt.Columns.Add("ActionPrice ($)", typeof(decimal));
-
-    Task.Run(async () => {
-            foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
-                var s = kvp.Value;
-                dt.Rows.Add(
-                s.TradingStrategyDto.Ticker, 
-                s.TradingStrategyDto.TradeAction, 
-                s.TradingStrategyDto.Quantity, 
-                s.TradingStrategyDto.ActionPrice);
-            }
-        });
+    dt.Columns.Add("Delete", typeof(string));
     return dt;
 }
 
@@ -181,10 +214,10 @@ void SetupInputValidation(TextField qty, TextField price) {
 bool IsNavKey(Key key) => key == Key.Backspace || key == Key.Delete || key == Key.CursorLeft || key == Key.CursorRight;
 
 void SetupLayoutHandling(Window top, TableView pTab, DataTable pSrc, TableView sTab, DataTable sSrc) {
-    int margin = 4;
+    int margin = 6;
     top.LayoutComplete += (e) => {
         AdjustColumnWidths(pTab, pSrc, margin, 2);
-        AdjustColumnWidths(sTab, sSrc, margin, 4);
+        AdjustColumnWidths(sTab, sSrc, margin, 6);
     };
 }
 
@@ -198,9 +231,11 @@ void AdjustColumnWidths(TableView table, DataTable source, int margin, int colCo
     }
 }
 
-void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect, DataTable sSrc, TableView sTab, HttpClient client){
+void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect, DataTable sSrc, TableView sTab){
     Application.MainLoop.AddTimeout(TimeSpan.FromMilliseconds(250), (_) => {
         var freshPrices = service.GetLatestPrices();
+        var tickers = service.GetLatestTickers().Select(t => (ustring)t).ToList();
+        var strategies = autoTradingStrategyService.GetStrategies();
         bool changed = false;
         foreach (var kvp in freshPrices) {
             var row = pSrc.AsEnumerable().FirstOrDefault(r => r.Field<string>("Ticker") == kvp.Key);
@@ -211,20 +246,21 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
         }
         if (changed) pTab.SetNeedsDisplay();
 
-        var tickers = service.GetLatestTickers().Select(t => (ustring)t).ToList();
         if (tickers.Count != tickerSelect.Source.Count) {
             tickerSelect.Source = new ListWrapper(tickers);
             tickerSelect.SetNeedsDisplay();
         }
 
         sSrc.Rows.Clear();
-        foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
+        foreach (var kvp in strategies) {
             var s = kvp.Value;
             sSrc.Rows.Add(
+            kvp.Key,
             s.TradingStrategyDto.Ticker, 
             s.TradingStrategyDto.TradeAction, 
             s.TradingStrategyDto.Quantity, 
-            s.TradingStrategyDto.ActionPrice);
+            s.TradingStrategyDto.ActionPrice,
+            "[DELETE]");
         }
         sTab.SetNeedsDisplay();
         return true;
