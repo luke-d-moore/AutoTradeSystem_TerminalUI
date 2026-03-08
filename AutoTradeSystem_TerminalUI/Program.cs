@@ -83,7 +83,7 @@ top.Add(leftPane, middlePane, rightPane);
 
 SetupInputValidation(quantityInput, priceInput);
 SetupLayoutHandling(top, priceTable, priceSource, strategyTable, strategySource);
-SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect, strategySource, strategyTable, httpClient);
+SetupUpdateLoop(pricingService, priceSource, priceTable, tickerSelect, strategySource, strategyTable);
 
 Application.Run(top);
 Application.Shutdown();
@@ -193,19 +193,6 @@ DataTable GetInitialStrategyData(HttpClient client) {
     dt.Columns.Add("Quantity", typeof(int));
     dt.Columns.Add("ActionPrice ($)", typeof(decimal));
     dt.Columns.Add("Delete", typeof(string));
-
-    Task.Run(async () => {
-            foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
-                var s = kvp.Value;
-                dt.Rows.Add(
-                kvp.Key,
-                s.TradingStrategyDto.Ticker, 
-                s.TradingStrategyDto.TradeAction, 
-                s.TradingStrategyDto.Quantity, 
-                s.TradingStrategyDto.ActionPrice,
-                "[DELETE]");
-            }
-        });
     return dt;
 }
 
@@ -238,9 +225,11 @@ void AdjustColumnWidths(TableView table, DataTable source, int margin, int colCo
     }
 }
 
-void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect, DataTable sSrc, TableView sTab, HttpClient client){
+void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, ComboBox tickerSelect, DataTable sSrc, TableView sTab){
     Application.MainLoop.AddTimeout(TimeSpan.FromMilliseconds(250), (_) => {
         var freshPrices = service.GetLatestPrices();
+        var tickers = service.GetLatestTickers().Select(t => (ustring)t).ToList();
+        var strategies = autoTradingStrategyService.GetStrategies();
         bool changed = false;
         foreach (var kvp in freshPrices) {
             var row = pSrc.AsEnumerable().FirstOrDefault(r => r.Field<string>("Ticker") == kvp.Key);
@@ -251,14 +240,13 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
         }
         if (changed) pTab.SetNeedsDisplay();
 
-        var tickers = service.GetLatestTickers().Select(t => (ustring)t).ToList();
         if (tickers.Count != tickerSelect.Source.Count) {
             tickerSelect.Source = new ListWrapper(tickers);
             tickerSelect.SetNeedsDisplay();
         }
 
         sSrc.Rows.Clear();
-        foreach (var kvp in autoTradingStrategyService.GetStrategies()) {
+        foreach (var kvp in strategies) {
             var s = kvp.Value;
             sSrc.Rows.Add(
             kvp.Key,
