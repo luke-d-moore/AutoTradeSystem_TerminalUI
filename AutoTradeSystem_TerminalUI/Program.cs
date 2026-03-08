@@ -32,44 +32,7 @@ var quantityInput = new TextField("") { X = 1, Y = 5, Width = Dim.Fill(1) };
 var priceInput = new TextField("") { X = 1, Y = 12, Width = Dim.Fill(1) };
 var actionSelect = new RadioGroup(new ustring[] { "Buy", "Sell" }) { X = 1, Y = 8 };
 var priceTable = CreateTableView(priceSource, theme);
-var strategyTable = CreateTableView(strategySource, theme);
-
-strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Delete"], new TableView.ColumnStyle {
-    Alignment = TextAlignment.Centered,
-    MinWidth = 8,
-    MaxWidth = 8
-});
-
-strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Id"], new TableView.ColumnStyle {
-    MinWidth = 0,
-    MaxWidth = 0,
-    Visible = false
-});
-
-strategyTable.CellActivated += async (e) => {
-    if (e.Col == 5) { 
-        var row = strategySource.Rows[e.Row];
-        var strategyId = row["Id"].ToString();
-        var ticker = row["Ticker"].ToString();
-
-        int result = MessageBox.Query("Delete Strategy", $"Delete {ticker} strategy?", "Yes", "No");
-        
-        if (result == 0) { 
-            try {
-                var success = await autoTradingStrategyService.DeleteStrategy(strategyId);
-                
-                if (success) {
-                    MessageBox.Query("Success", "Strategy Deleted", "Ok");
-                } else {
-                    MessageBox.ErrorQuery("Error", "API failed to delete strategy.", "Ok");
-                }
-            } catch (Exception ex) {
-                MessageBox.ErrorQuery("Connection Error", ex.Message, "Ok");
-            }
-        }
-    }
-};
-
+var strategyTable = CreateStrategyTableView(strategySource, theme);
 
 var leftPane = CreateOrderPane(tickerSelect, quantityInput, actionSelect, priceInput, httpClient);
 var middlePane = new FrameView("MARKET PRICES") { X = Pos.Right(leftPane), Y = 0, Width = Dim.Percent(20), Height = Dim.Fill() };
@@ -176,6 +139,49 @@ TableView CreateTableView(DataTable source, ColorScheme theme) {
         ColorScheme = theme,
         Style = new TableView.TableStyle { AlwaysShowHeaders = true, ShowHorizontalHeaderUnderline = true }
     };
+}
+
+TableView CreateStrategyTableView(DataTable source, ColorScheme theme) {
+
+var strategyTable = CreateTableView(strategySource, theme);
+
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Delete"], new TableView.ColumnStyle {
+    Alignment = TextAlignment.Centered,
+    MinWidth = 8,
+    MaxWidth = 8
+});
+
+strategyTable.Style.ColumnStyles.Add(strategySource.Columns["Id"], new TableView.ColumnStyle {
+    MinWidth = 0,
+    MaxWidth = 0,
+    Visible = false
+});
+
+strategyTable.CellActivated += async (e) => {
+    if (e.Col == 5) { 
+        var row = strategySource.Rows[e.Row];
+        var strategyId = row["Id"].ToString();
+        var ticker = row["Ticker"].ToString();
+
+        int result = MessageBox.Query("Delete Strategy", $"Delete {ticker} strategy?", "Yes", "No");
+        
+        if (result == 0) { 
+            try {
+                var success = await autoTradingStrategyService.DeleteStrategy(strategyId);
+                
+                if (success) {
+                    MessageBox.Query("Success", "Strategy Deleted", "Ok");
+                } else {
+                    MessageBox.ErrorQuery("Error", "API failed to delete strategy.", "Ok");
+                }
+            } catch (Exception ex) {
+                MessageBox.ErrorQuery("Connection Error", ex.Message, "Ok");
+            }
+        }
+    }
+};
+
+return strategyTable;
 }
 
 DataTable GetPriceTable() {
