@@ -61,16 +61,17 @@ namespace AutoTradeSystem_TerminalUI.Services
         {
             var response = await _client.PostAsJsonAsync("api/TradingStrategy/", tradingStrategyDto);
             if (response.IsSuccessStatusCode) {
-                _tradingStrategies[""]=new TradingStrategy(){
+                var addStrategyResponse = await response.Content.ReadFromJsonAsync<AddStrategyResponse>();
+                _tradingStrategies[addStrategyResponse.StrategyID]=new TradingStrategy(){
                 TradingStrategyDto = new TradingStrategyDto()
                 {
-                    Ticker = tradingStrategyDto.Ticker, 
-                    TradeAction = tradingStrategyDto.TradeAction,
-                    Quantity = tradingStrategyDto.Quantity,
-                    ActionPrice = tradingStrategyDto.ActionPrice   
+                    Ticker = addStrategyResponse.TradingStrategyDto.Ticker, 
+                    TradeAction = addStrategyResponse.TradingStrategyDto.TradeAction,
+                    Quantity = addStrategyResponse.TradingStrategyDto.Quantity,
+                    ActionPrice = addStrategyResponse.TradingStrategyDto.ActionPrice   
                 }
                 };
-                return await response.Content.ReadFromJsonAsync<AddStrategyResponse>();
+                return addStrategyResponse;
             }
             else
             {

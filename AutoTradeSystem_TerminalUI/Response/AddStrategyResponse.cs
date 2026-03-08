@@ -17,5 +17,6 @@ namespace AutoTradeSystem_TerminalUI
 
         [JsonPropertyName("timeStamp")]
         public DateTime TimeStamp { get; set; }
+        public string StrategyID { get; set; }
     }
 }
