@@ -259,7 +259,7 @@ void SetupUpdateLoop(IPricingService service, DataTable pSrc, TableView pTab, Co
             s.TradingStrategyDto.Ticker, 
             s.TradingStrategyDto.TradeAction, 
             s.TradingStrategyDto.Quantity, 
-            s.TradingStrategyDto.ActionPrice,
+            s.ActionPrice > 0 ? s.ActionPrice : s.TradingStrategyDto.ActionPrice,
             "[DELETE]");
         }
         sTab.SetNeedsDisplay();
